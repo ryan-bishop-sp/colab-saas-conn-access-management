@@ -37,6 +37,7 @@ import {
     SourceAppV2025,
     SourcesApi,
     SourcesV2025Api,
+    SourceV2025,
 } from 'sailpoint-api-client'
 import { logger } from '@sailpoint/connector-sdk'
 import axios from 'axios'
@@ -45,11 +46,16 @@ import { TOKEN_URL_PATH } from './data/constants'
 import { Config } from './model/config'
 import { retriesConfig } from './axios'
 import { throttle } from './utils/throttle'
+import { MappingColumns } from './utils/mapping-source'
+import { planMappingSourceSetup } from './utils/mapping-source-setup'
+import { hasOwnershipMarker } from './utils/ownership'
 
 // Lightweight types for search results - only keep essential fields to reduce memory
 export interface LightweightAccessProfile {
     id: string
     name: string
+    description?: string | null
+    source?: { id?: string } | null
     entitlements?: Array<{ id?: string | null }> | null
     requestable?: boolean
     accessRequestConfig?: unknown
@@ -115,6 +121,56 @@ export class ISCClient {
         return response.data
     }
 
+    /**
+     * Resolve a source by exact name. Throws if no source or more than one source has that name.
+     */
+    async resolveSourceByName(name: string): Promise<SourceV2025> {
+        const api = new SourcesV2025Api(this.config)
+        const response = await api.listSources({ filters: `name eq "${name}"` })
+        const matches = response.data.filter((source) => source.name === name)
+        if (matches.length === 0) throw new Error(`Source "${name}" not found`)
+        if (matches.length > 1) throw new Error(`${matches.length} sources are named "${name}"`)
+        return matches[0]
+    }
+
+    /**
+     * Bring the mapping source's group schema and delimited-file settings in line with the mapping columns,
+     * so an entitlement CSV upload loads one entitlement per row. Only adds or fixes; never removes.
+     * Requires the PAT owner to be allowed to update the source and its schemas.
+     */
+    async applyMappingSourceSetup(source: SourceV2025, columns: MappingColumns): Promise<string[]> {
+        const api = new SourcesV2025Api(this.config)
+        const applied: string[] = []
+        try {
+            const schemas = (await api.getSourceSchemas({ sourceId: source.id! })).data
+            const setup = planMappingSourceSetup(
+                schemas,
+                source.connectorAttributes as Record<string, any> | undefined,
+                columns
+            )
+            if (setup.schema) {
+                await api.putSourceSchema({
+                    sourceId: source.id!,
+                    schemaId: setup.schema.id!,
+                    schemaV2025: setup.schema,
+                })
+                applied.push(`schema ${setup.schema.name}`)
+            }
+            if (setup.connectorAttributePatch.length > 0) {
+                await api.updateSource({ id: source.id!, jsonPatchOperationV2025: setup.connectorAttributePatch })
+                applied.push(...setup.connectorAttributePatch.map((op) => op.path.replace('/connectorAttributes/', '')))
+            }
+        } catch (error: any) {
+            if (error?.response?.status === 403) {
+                throw new Error(
+                    `Not allowed to update mapping source "${source.name}". The PAT owner needs permission to update sources and source schemas.`
+                )
+            }
+            throw error
+        }
+        return applied
+    }
+
     async listEntitlements(filters: string): Promise<EntitlementV2025[]> {
         const api = new EntitlementsV2025Api(this.config)
         const requestParameters: EntitlementsV2025ApiListEntitlementsRequest = {
@@ -155,6 +211,19 @@ export class ISCClient {
         return response.data[0] ? response.data[0] : undefined
     }
 
+    /**
+     * All source apps with an exact name, tenant-wide. Used by the mapping-mode ownership check.
+     */
+    async listAppsByName(name: string): Promise<SourceAppV2025[]> {
+        const api = new AppsV2025Api(this.config)
+        const requestParameters: AppsV2025ApiListAllSourceAppRequest = {
+            filters: `name eq "${name}"`,
+            xSailPointExperimental: 'true',
+        }
+        const response = await api.listAllSourceApp(requestParameters)
+        return response.data.filter((app) => app.name === name)
+    }
+
     async getAppById(id: string): Promise<SourceAppV2025> {
         const api = new AppsV2025Api(this.config)
         const requestParameters: AppsV2025ApiGetSourceAppRequest = {
@@ -175,12 +244,12 @@ export class ISCClient {
         return response.data.map((ap: any) => ap.id).filter(Boolean)
     }
 
-    async createApp(name: string, sourceId: string): Promise<SourceAppV2025> {
+    async createApp(name: string, sourceId: string, description: string = name): Promise<SourceAppV2025> {
         const api = new AppsV2025Api(this.config)
         const requestParameters: AppsV2025ApiCreateSourceAppRequest = {
             sourceAppCreateDtoV2025: {
                 name,
-                description: name,
+                description,
                 accountSource: {
                     id: sourceId,
                 },
@@ -221,13 +290,14 @@ export class ISCClient {
         sourceId: string,
         entitlements: EntitlementRefV2025[],
         requestable: boolean = false,
-        accessRequestConfig?: RequestabilityV2025
+        accessRequestConfig?: RequestabilityV2025,
+        description: string = name
     ): Promise<AccessProfileV2025> {
         const api = new AccessProfilesV2025Api(this.config)
         const requestParameters: AccessProfilesV2025ApiCreateAccessProfileRequest = {
             accessProfileV2025: {
                 name,
-                description: name,
+                description,
                 owner: {
                     id: ownerId,
                     type: 'IDENTITY',
@@ -360,6 +430,22 @@ export class ISCClient {
         }
         const response = await Paginator.paginate(api, api.listAllSourceApp as any, requestParameters)
         return response.data as SourceAppV2025[]
+    }
+
+    /**
+     * Access profiles on a source that carry a mapping definition's ownership marker.
+     */
+    async listOwnedAccessProfiles(sourceId: string, definitionName: string): Promise<AccessProfileV2025[]> {
+        const accessProfiles = await this.listAccessProfilesBySources([sourceId])
+        return accessProfiles.filter((ap) => hasOwnershipMarker(ap.description, definitionName))
+    }
+
+    /**
+     * Source apps on an account source that carry a mapping definition's ownership marker.
+     */
+    async listOwnedApps(sourceId: string, definitionName: string): Promise<SourceAppV2025[]> {
+        const apps = await this.listAppsBySources([sourceId])
+        return apps.filter((app) => hasOwnershipMarker(app.description, definitionName))
     }
 
     /**
@@ -496,6 +582,8 @@ export class ISCClient {
                 results.push({
                     id: accessProfile.id!,
                     name: accessProfile.name,
+                    description: accessProfile.description,
+                    source: accessProfile.source ? { id: accessProfile.source.id } : undefined,
                     entitlements: accessProfile.entitlements,
                     requestable: accessProfile.requestable,
                     accessRequestConfig: accessProfile.accessRequestConfig,
