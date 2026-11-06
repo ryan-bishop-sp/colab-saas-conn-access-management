@@ -8,13 +8,7 @@ import {
 } from '@sailpoint/connector-sdk'
 import { ISCClient } from './isc-client'
 import { Config } from './model/config'
-import {
-    aggregateAccessProfiles,
-    aggregateEntitlements,
-    aggregateOuApplications,
-    aggregateRoles,
-    checkOuApplications,
-} from './operations'
+import { aggregateAccessProfiles, aggregateEntitlements, aggregateRoles } from './operations'
 
 export const PROCESSINGWAIT = 60 * 1000
 export const connector = async () => {
@@ -25,9 +19,6 @@ export const connector = async () => {
     const stdTestConnection: StdTestConnectionHandler = async (context, input, res) => {
         try {
             await isc.getPublicIdentityConfig()
-            if (config.ouApplications?.length) {
-                await checkOuApplications(isc, config.ouApplications)
-            }
             res.send({})
         } catch (error) {
             logger.error(error)
@@ -48,9 +39,6 @@ export const connector = async () => {
                         for (const definition of config.accessProfiles) {
                             await aggregateAccessProfiles(config, isc, definition)
                         }
-                    }
-                    if (config.ouApplications?.length) {
-                        await aggregateOuApplications(isc, config.ouApplications)
                     }
                     break
                 case 'role':

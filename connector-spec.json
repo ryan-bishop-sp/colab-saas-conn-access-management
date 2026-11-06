@@ -2,10 +2,7 @@
     "name": "Access Management",
     "keyType": "simple",
     "description": "Automated entitlement governance connector for Identity Security Cloud. Enables bulk updates to entitlement properties, automated access profile and application creation and management, and role lifecycle management using flexible query-based selection and Velocity expressions.",
-    "commands": [
-        "std:entitlement:list",
-        "std:test-connection"
-    ],
+    "commands": ["std:entitlement:list", "std:test-connection"],
     "showDebugLoggingOption": true,
     "sourceConfigInitialValues": {
         "nameTemplate": "$name"
@@ -52,7 +49,7 @@
                 {
                     "type": "section",
                     "sectionTitle": "Entitlement Aggregation Configuration",
-                    "sectionHelpMessage": "Configure bulk updates to entitlements across your sources. Update requestable/privileged flags and approval configurations without creating access profiles or roles. Each definition uses an API query to select entitlements, then applies a Velocity expression filter.",
+                    "sectionHelpMessage": "Configure bulk updates and business-application context on existing entitlements without creating access profiles, applications or roles. Each definition uses one query and one or more OR'd Velocity expressions.",
                     "items": [
                         {
                             "key": "entitlements",
@@ -66,7 +63,7 @@
                             "copyButton": true,
                             "buttonLabel": "New Entitlement Update Definition",
                             "type": "cardList",
-                            "helpKey": "Add definitions to select and bulk-update entitlements. Each definition queries entitlements via the Entitlement API, filters them using a Velocity expression, then applies property updates (requestable, privileged) via bulk update API and optionally configures approval workflows per entitlement.",
+                            "helpKey": "Add definitions to select and update entitlements. Definitions sharing the same query reuse one API result. Expressions are OR'd. Optional application enrichment patches friendly names, descriptions and Access Model Metadata while preserving technical values.",
                             "subMenus": [
                                 {
                                     "label": "Selection configuration",
@@ -88,9 +85,16 @@
                                         {
                                             "key": "entitlementExpression",
                                             "label": "Entitlement expression",
-                                            "helpKey": "Velocity expression to filter selected entitlements. Return any non-empty value to include the entitlement, or return empty/null to exclude. Variables: $entitlement (full object), top-level aliases ($id, $name, $value, $attribute, $description, $privileged, $requestable, $source), and $definitionName (this definition's configuration name). Example: #if($name.contains('Admin'))include#end",
+                                            "helpKey": "Primary Velocity expression to select entitlements. Return any non-empty value to include the entitlement, or return empty/null to exclude. Variables include $entitlement, top-level aliases, $definitionName, $businessApplication and $technicalName. Example: #if($value.contains('OU=Prod,OU=AdobeAEM'))include#end",
                                             "type": "textarea",
                                             "required": true
+                                        },
+                                        {
+                                            "key": "additionalEntitlementExpressions",
+                                            "label": "Additional entitlement expressions (OR)",
+                                            "helpKey": "Optional additional Velocity selectors. An entitlement is selected when the primary expression or any expression in this list returns a non-empty value. Use these for alternate environments such as Dev, QA, UAT or Sandbox.",
+                                            "type": "list",
+                                            "required": false
                                         }
                                     ]
                                 },
@@ -142,6 +146,60 @@
                                                     "value": "MANAGER"
                                                 }
                                             ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": "Business application enrichment (optional)",
+                                    "items": [
+                                        {
+                                            "key": "businessApplicationName",
+                                            "label": "Business application name",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "Enables enrichment when set. Matching entitlements are labeled with this canonical business application and marked [AMC-ENT:<name>] in their descriptions."
+                                        },
+                                        {
+                                            "key": "displayNameExpression",
+                                            "label": "Friendly name expression",
+                                            "type": "textarea",
+                                            "required": false,
+                                            "helpKey": "Required when a business application name is set. Produces the entitlement name shown in certifications. Use $businessApplication, $technicalName and optionally $environment. Example: $businessApplication - $environment - $technicalName"
+                                        },
+                                        {
+                                            "key": "descriptionExpression",
+                                            "label": "Description expression",
+                                            "type": "textarea",
+                                            "required": false,
+                                            "helpKey": "Optional description template. The connector automatically appends its ownership marker."
+                                        },
+                                        {
+                                            "key": "businessApplicationMetadataKey",
+                                            "label": "Business Application metadata key",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "Technical key of an existing entitlement Access Model Metadata attribute that allows the application name value."
+                                        },
+                                        {
+                                            "key": "environmentExpression",
+                                            "label": "Environment expression",
+                                            "type": "textarea",
+                                            "required": false,
+                                            "helpKey": "Optional Velocity expression that derives Prod, Dev, QA, UAT, Sandbox or another environment from the entitlement."
+                                        },
+                                        {
+                                            "key": "environmentMetadataKey",
+                                            "label": "Environment metadata key",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "Technical key of an existing entitlement Access Model Metadata attribute. Requires an environment expression."
+                                        },
+                                        {
+                                            "key": "dryRun",
+                                            "label": "Dry run",
+                                            "type": "toggle",
+                                            "required": false,
+                                            "helpKey": "Plan and report every selected entitlement without applying enrichment or other updates in this definition."
                                         }
                                     ]
                                 }
@@ -282,123 +340,6 @@
                                             "parentKey": "groupAccessProfiles",
                                             "parentValue": "true",
                                             "helpKey": "Velocity expression to name applications (evaluated per access profile). Used only when createApplication=true and groupAccessProfiles=true. Variables: $name (access profile name), $definitionName (configuration definition name). If groupEntitlements=false: $entitlement (single entitlement object). If groupEntitlements=true: both $entitlement and $entitlements are arrays of entitlement objects. Example: ${name}_App or ${definitionName}_App"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "type": "menu",
-            "label": "OU Applications",
-            "items": [
-                {
-                    "type": "section",
-                    "sectionTitle": "Applications from Organizational Units",
-                    "sectionHelpMessage": "Build one access profile and one application per definition from the groups in one or more organizational units. Groups anywhere beneath the listed OUs are discovered on every aggregation; OUs and applications are only created from the definitions you add here. Every check runs before anything is written: invalid definitions, OUs shared or nested between applications, OUs with no groups, and names already held by objects these definitions did not create all fail the run.",
-                    "items": [
-                        {
-                            "key": "ouApplications",
-                            "label": "OU Application Definitions",
-                            "titleKey": "name",
-                            "subtitleKey": "targetSourceName",
-                            "dragNDropEnabled": true,
-                            "deleteButton": true,
-                            "editButton": true,
-                            "addButton": true,
-                            "copyButton": true,
-                            "buttonLabel": "New OU Application",
-                            "type": "cardList",
-                            "helpKey": "Each definition is one application. The access profile and application are both named after it and carry the marker [AMC:<name>] in their description; the connector only ever updates or deletes objects with that marker. Groups are read from the target source's memberOf entitlements, so aggregate the target source first.",
-                            "subMenus": [
-                                {
-                                    "label": "Application",
-                                    "items": [
-                                        {
-                                            "key": "name",
-                                            "label": "Application name",
-                                            "type": "text",
-                                            "required": true,
-                                            "helpKey": "Names the access profile and the application, for example \"Adobe AEM\". Must be unique across definitions. Renaming a definition leaves the old objects in place as orphans."
-                                        },
-                                        {
-                                            "key": "targetSourceName",
-                                            "label": "Target source name",
-                                            "type": "text",
-                                            "required": true,
-                                            "helpKey": "Exact name of the source that holds the groups, for example the Active Directory source. The access profile and application are created on this source."
-                                        },
-                                        {
-                                            "key": "organizationalUnits",
-                                            "label": "Organizational units",
-                                            "type": "list",
-                                            "required": true,
-                                            "helpKey": "One or more OU distinguished names, for example OU=AdobeAEM,OU=Enterprise,DC=example,DC=com. Every group anywhere beneath these OUs, including sub-OUs such as Prod or Dev, belongs to this application. An OU can't be shared with, or sit inside, another application's OU."
-                                        }
-                                    ]
-                                },
-                                {
-                                    "label": "Access Profile configuration",
-                                    "items": [
-                                        {
-                                            "key": "dryRun",
-                                            "label": "Dry run",
-                                            "type": "toggle",
-                                            "helpKey": "Run every check and log the planned changes for this application without creating, updating or deleting anything."
-                                        },
-                                        {
-                                            "key": "deleteMode",
-                                            "label": "Delete mode",
-                                            "type": "toggle",
-                                            "helpKey": "DELETION MODE: delete this definition's access profile and application, identified by the [AMC:<name>] marker, and nothing else."
-                                        },
-                                        {
-                                            "key": "requestable",
-                                            "label": "Requestable",
-                                            "type": "toggle",
-                                            "parentKey": "deleteMode",
-                                            "parentValue": "false",
-                                            "required": false,
-                                            "helpKey": "Make the access profile requestable and show the application in the request center."
-                                        },
-                                        {
-                                            "key": "requireApproval",
-                                            "label": "Require approval?",
-                                            "type": "toggle",
-                                            "parentKey": "requestable",
-                                            "parentValue": "true",
-                                            "required": false,
-                                            "helpKey": "Require approval for access requests."
-                                        },
-                                        {
-                                            "key": "approverType",
-                                            "label": "Approver",
-                                            "type": "select",
-                                            "required": true,
-                                            "parentKey": "requireApproval",
-                                            "parentValue": "true",
-                                            "helpKey": "Who approves requests. APP_OWNER: application owner. OWNER: access profile owner. SOURCE_OWNER: source owner. MANAGER: requester's manager.",
-                                            "options": [
-                                                {
-                                                    "label": "Application Owner",
-                                                    "value": "APP_OWNER"
-                                                },
-                                                {
-                                                    "label": "Owner",
-                                                    "value": "OWNER"
-                                                },
-                                                {
-                                                    "label": "Source Owner",
-                                                    "value": "SOURCE_OWNER"
-                                                },
-                                                {
-                                                    "label": "Manager",
-                                                    "value": "MANAGER"
-                                                }
-                                            ]
                                         }
                                     ]
                                 }

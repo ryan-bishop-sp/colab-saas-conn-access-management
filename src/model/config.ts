@@ -1,9 +1,4 @@
-export type ApproverType =
-    | 'APP_OWNER'
-    | 'OWNER'
-    | 'SOURCE_OWNER'
-    | 'MANAGER'
-    | 'ENTITLEMENT_OWNER'
+export type ApproverType = 'APP_OWNER' | 'OWNER' | 'SOURCE_OWNER' | 'MANAGER' | 'ENTITLEMENT_OWNER'
 
 export interface Definition {
     name: string
@@ -48,6 +43,22 @@ export interface RoleDefinition extends Definition {
 export interface EntitlementDefinition extends Definition {
     /** When true, mark selected entitlements as privileged (bulk patch). */
     privileged?: boolean
+    /** Additional Velocity selectors OR'd with entitlementExpression. */
+    additionalEntitlementExpressions?: string[]
+    /** Enables business-application enrichment when set. */
+    businessApplicationName?: string
+    /** Velocity expression that produces the friendly entitlement display name. */
+    displayNameExpression?: string
+    /** Optional Velocity expression that produces the entitlement description. */
+    descriptionExpression?: string
+    /** Existing entitlement AMM attribute technical key for the business application. */
+    businessApplicationMetadataKey?: string
+    /** Optional Velocity expression that produces the environment metadata value. */
+    environmentExpression?: string
+    /** Existing entitlement AMM attribute technical key for the environment. */
+    environmentMetadataKey?: string
+    /** Plan and report enrichment without patching entitlements. */
+    dryRun?: boolean
 }
 
 /**
