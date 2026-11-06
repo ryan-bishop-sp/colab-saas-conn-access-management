@@ -51,30 +51,21 @@ export interface EntitlementDefinition extends Definition {
 }
 
 /**
- * Access profiles and applications driven by a mapping file loaded as entitlements on a delimited-file source.
- * Each mapping row assigns AD groups (by DN or CN prefix) to an application name; the connector builds one
- * access profile and one source app per application name. The mapping file replaces query and expressions.
+ * One application built from organizational units: every group in the subtree of the listed OUs on the
+ * target source goes into one access profile and one source app, both named `name`. Groups are discovered
+ * on every run; OUs are not.
  */
-export interface MappingDefinition {
+export interface OuApplicationDefinition {
+    /** Application name. Also names the access profile and the ownership marker. */
     name: string
-    /** Delimited-file source whose entitlements are the mapping rows. */
-    mappingSourceName: string
     /** Source whose group entitlements are matched, e.g. the AD source. */
     targetSourceName: string
-    /** Mapping-file column holding the row key. Defaults to mapping_id. */
-    idColumn?: string
-    /** Mapping-file column holding the application name. Defaults to application_name. */
-    applicationNameColumn?: string
-    /** Mapping-file column holding the match type (dn, cn_prefix, ou). Defaults to match_type. */
-    matchTypeColumn?: string
-    /** Mapping-file column holding the match value. Defaults to match_value. */
-    matchValueColumn?: string
-    /** Extra mapping-file columns kept for traceability. Defaults to instance_name and integration_type. */
-    traceabilityColumns?: string[]
+    /** OU distinguished names. Groups anywhere beneath any of them belong to this application. */
+    organizationalUnits: string[]
     requestable: boolean
     requireApproval: boolean
     approverType?: ApproverType
-    /** When true, delete only the access profiles and apps this definition created. Never reads the mapping file. */
+    /** When true, delete only the access profile and app this definition created. */
     deleteMode?: boolean
     /** When true, run every check and log the planned changes without writing. */
     dryRun?: boolean
@@ -90,5 +81,5 @@ export interface Config {
     accessProfiles?: AccessProfileDefinition[]
     roles?: RoleDefinition[]
     entitlements?: EntitlementDefinition[]
-    mappingDefinitions?: MappingDefinition[]
+    ouApplications?: OuApplicationDefinition[]
 }

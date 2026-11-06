@@ -1,4 +1,4 @@
-import { checkOwnership, describeOwned, hasOwnershipMarker, ownershipMarker } from './ownership'
+import { checkOwnership, describeOwned, hasOwnershipMarker, markedDefinitionName, ownershipMarker } from './ownership'
 
 const definition = 'Test Apps'
 const sourceId = 'src-directory'
@@ -10,6 +10,12 @@ describe('ownership marker', () => {
         expect(hasOwnershipMarker('Payroll [AMC:Test Apps]', definition)).toBe(true)
         expect(hasOwnershipMarker('Payroll [AMC:Other Apps]', definition)).toBe(false)
         expect(hasOwnershipMarker(undefined, definition)).toBe(false)
+    })
+
+    it('reads the definition name from any marker', () => {
+        expect(markedDefinitionName('Payroll [AMC:Test Apps]')).toBe('Test Apps')
+        expect(markedDefinitionName('Hand built')).toBeUndefined()
+        expect(markedDefinitionName(null)).toBeUndefined()
     })
 })
 

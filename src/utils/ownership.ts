@@ -1,11 +1,15 @@
 /**
- * Ownership marker for objects created by a mapping definition. An existing access profile or app counts as
+ * Ownership marker for objects created by an OU application definition. An existing access profile or app counts as
  * owned only if its name matches, it sits on the expected source, and its description carries this marker.
  */
 export const ownershipMarker = (definitionName: string): string => `[AMC:${definitionName}]`
 
 export const hasOwnershipMarker = (description: string | null | undefined, definitionName: string): boolean =>
     (description ?? '').includes(ownershipMarker(definitionName))
+
+/** The definition name in a description's AMC marker, or undefined when there is no marker. */
+export const markedDefinitionName = (description: string | null | undefined): string | undefined =>
+    /\[AMC:([^\]]+)\]/.exec(description ?? '')?.[1]
 
 export const describeOwned = (name: string, definitionName: string): string =>
     `${name} ${ownershipMarker(definitionName)}`

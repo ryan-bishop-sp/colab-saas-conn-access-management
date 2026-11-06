@@ -11,9 +11,9 @@ import { Config } from './model/config'
 import {
     aggregateAccessProfiles,
     aggregateEntitlements,
-    aggregateMappingDefinition,
+    aggregateOuApplications,
     aggregateRoles,
-    setUpMappingDefinition,
+    checkOuApplications,
 } from './operations'
 
 export const PROCESSINGWAIT = 60 * 1000
@@ -25,8 +25,8 @@ export const connector = async () => {
     const stdTestConnection: StdTestConnectionHandler = async (context, input, res) => {
         try {
             await isc.getPublicIdentityConfig()
-            for (const definition of config.mappingDefinitions ?? []) {
-                await setUpMappingDefinition(isc, definition)
+            if (config.ouApplications?.length) {
+                await checkOuApplications(isc, config.ouApplications)
             }
             res.send({})
         } catch (error) {
@@ -49,11 +49,8 @@ export const connector = async () => {
                             await aggregateAccessProfiles(config, isc, definition)
                         }
                     }
-                    if (config.mappingDefinitions) {
-                        logger.debug(`Processing ${config.mappingDefinitions.length} mapping definitions`)
-                        for (const definition of config.mappingDefinitions) {
-                            await aggregateMappingDefinition(isc, definition)
-                        }
+                    if (config.ouApplications?.length) {
+                        await aggregateOuApplications(isc, config.ouApplications)
                     }
                     break
                 case 'role':

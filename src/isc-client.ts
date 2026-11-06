@@ -46,9 +46,7 @@ import { TOKEN_URL_PATH } from './data/constants'
 import { Config } from './model/config'
 import { retriesConfig } from './axios'
 import { throttle } from './utils/throttle'
-import { MappingColumns } from './utils/mapping-source'
-import { planMappingSourceSetup } from './utils/mapping-source-setup'
-import { hasOwnershipMarker } from './utils/ownership'
+import { markedDefinitionName } from './utils/ownership'
 
 // Lightweight types for search results - only keep essential fields to reduce memory
 export interface LightweightAccessProfile {
@@ -133,49 +131,6 @@ export class ISCClient {
         return matches[0]
     }
 
-    /**
-     * Bring the mapping source's group schema and delimited-file settings in line with the mapping columns,
-     * so an entitlement CSV upload loads one entitlement per row. Only adds or fixes; never removes.
-     * Requires the PAT owner to be allowed to update the source and its schemas.
-     * Returns the changes made, or the changes that would be made when dryRun is true.
-     */
-    async applyMappingSourceSetup(source: SourceV2025, columns: MappingColumns, dryRun = false): Promise<string[]> {
-        const api = new SourcesV2025Api(this.config)
-        const applied: string[] = []
-        try {
-            const schemas = (await api.getSourceSchemas({ sourceId: source.id! })).data
-            const setup = planMappingSourceSetup(
-                schemas,
-                source.connectorAttributes as Record<string, any> | undefined,
-                columns
-            )
-            if (setup.schema) {
-                if (!dryRun) {
-                    await api.putSourceSchema({
-                        sourceId: source.id!,
-                        schemaId: setup.schema.id!,
-                        schemaV2025: setup.schema,
-                    })
-                }
-                applied.push(`schema ${setup.schema.name}`)
-            }
-            if (setup.connectorAttributePatch.length > 0) {
-                if (!dryRun) {
-                    await api.updateSource({ id: source.id!, jsonPatchOperationV2025: setup.connectorAttributePatch })
-                }
-                applied.push(...setup.connectorAttributePatch.map((op) => op.path.replace('/connectorAttributes/', '')))
-            }
-        } catch (error: any) {
-            if (error?.response?.status === 403) {
-                throw new Error(
-                    `Not allowed to update mapping source "${source.name}". The PAT owner needs permission to update sources and source schemas.`
-                )
-            }
-            throw error
-        }
-        return applied
-    }
-
     async listEntitlements(filters: string, sorters?: string): Promise<EntitlementV2025[]> {
         const api = new EntitlementsV2025Api(this.config)
         const requestParameters: EntitlementsV2025ApiListEntitlementsRequest = {
@@ -218,7 +173,7 @@ export class ISCClient {
     }
 
     /**
-     * All source apps with an exact name, tenant-wide. Used by the mapping-mode ownership check.
+     * All source apps with an exact name, tenant-wide. Used by the OU application ownership check.
      */
     async listAppsByName(name: string): Promise<SourceAppV2025[]> {
         const api = new AppsV2025Api(this.config)
@@ -439,19 +394,25 @@ export class ISCClient {
     }
 
     /**
-     * Access profiles on a source that carry a mapping definition's ownership marker.
+     * Access profiles on a source that carry any AMC ownership marker, with the definition name in the marker.
      */
-    async listOwnedAccessProfiles(sourceId: string, definitionName: string): Promise<AccessProfileV2025[]> {
+    async listMarkedAccessProfiles(sourceId: string): Promise<Array<AccessProfileV2025 & { markedBy: string }>> {
         const accessProfiles = await this.listAccessProfilesBySources([sourceId])
-        return accessProfiles.filter((ap) => hasOwnershipMarker(ap.description, definitionName))
+        return accessProfiles.flatMap((ap) => {
+            const markedBy = markedDefinitionName(ap.description)
+            return markedBy === undefined ? [] : [{ ...ap, markedBy }]
+        })
     }
 
     /**
-     * Source apps on an account source that carry a mapping definition's ownership marker.
+     * Source apps on an account source that carry any AMC ownership marker, with the definition name in the marker.
      */
-    async listOwnedApps(sourceId: string, definitionName: string): Promise<SourceAppV2025[]> {
+    async listMarkedApps(sourceId: string): Promise<Array<SourceAppV2025 & { markedBy: string }>> {
         const apps = await this.listAppsBySources([sourceId])
-        return apps.filter((app) => hasOwnershipMarker(app.description, definitionName))
+        return apps.flatMap((app) => {
+            const markedBy = markedDefinitionName(app.description)
+            return markedBy === undefined ? [] : [{ ...app, markedBy }]
+        })
     }
 
     /**
