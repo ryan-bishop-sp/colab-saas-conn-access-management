@@ -1,5 +1,6 @@
 {
     "name": "Access Management",
+    "keyType": "simple",
     "description": "Automated entitlement governance connector for Identity Security Cloud. Enables bulk updates to entitlement properties, automated access profile and application creation and management, and role lifecycle management using flexible query-based selection and Velocity expressions.",
     "commands": [
         "std:entitlement:list",
@@ -281,6 +282,163 @@
                                             "parentKey": "groupAccessProfiles",
                                             "parentValue": "true",
                                             "helpKey": "Velocity expression to name applications (evaluated per access profile). Used only when createApplication=true and groupAccessProfiles=true. Variables: $name (access profile name), $definitionName (configuration definition name). If groupEntitlements=false: $entitlement (single entitlement object). If groupEntitlements=true: both $entitlement and $entitlements are arrays of entitlement objects. Example: ${name}_App or ${definitionName}_App"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "menu",
+            "label": "Mapping Definitions",
+            "items": [
+                {
+                    "type": "section",
+                    "sectionTitle": "Mapping File Access Profiles and Applications",
+                    "sectionHelpMessage": "Build one access profile and one application per application name from a mapping file. The mapping file is a CSV loaded as entitlements on a delimited-file source; each row assigns groups on the target source to an application by exact DN (dn) or CN prefix (cn_prefix). ou rows are accepted but deferred. The mapping file replaces the entitlement query and expressions. Every check runs before any access profile or application is written: invalid rows, rules that match no group, groups mapped to two applications, and names already held by objects this definition did not create all fail the run.",
+                    "items": [
+                        {
+                            "key": "mappingDefinitions",
+                            "label": "Mapping Definitions",
+                            "titleKey": "name",
+                            "subtitleKey": "mappingSourceName",
+                            "dragNDropEnabled": true,
+                            "deleteButton": true,
+                            "editButton": true,
+                            "addButton": true,
+                            "copyButton": true,
+                            "buttonLabel": "New Mapping Definition",
+                            "type": "cardList",
+                            "helpKey": "Each definition reads mapping rows from the mapping source, matches them against the target source's memberOf groups, and creates or updates one access profile and one application per application name. Objects it creates carry the marker [AMC:<definition name>] in their description; it only ever updates or deletes objects with that marker. Test Connection applies the mapping columns to the mapping source's entitlement schema and file settings; run it before the first CSV upload. The PAT owner needs permission to update sources and source schemas.",
+                            "subMenus": [
+                                {
+                                    "label": "Sources",
+                                    "items": [
+                                        {
+                                            "key": "name",
+                                            "label": "Definition name",
+                                            "type": "text",
+                                            "required": true,
+                                            "helpKey": "Identifies this definition in logs and in the ownership marker [AMC:<definition name>]. Changing it later means existing objects are no longer recognized as owned."
+                                        },
+                                        {
+                                            "key": "mappingSourceName",
+                                            "label": "Mapping source name",
+                                            "type": "text",
+                                            "required": true,
+                                            "helpKey": "Exact name of the delimited-file source that holds the mapping CSV as entitlements. Upload the CSV through the source's entitlement import."
+                                        },
+                                        {
+                                            "key": "targetSourceName",
+                                            "label": "Target source name",
+                                            "type": "text",
+                                            "required": true,
+                                            "helpKey": "Exact name of the source whose groups are matched, for example the Active Directory source. Groups are read from its memberOf entitlements. Access profiles and applications are created on this source."
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": "Mapping schema",
+                                    "items": [
+                                        {
+                                            "key": "idColumn",
+                                            "label": "Row key column",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "CSV column with a unique, stable key per row. Defaults to mapping_id."
+                                        },
+                                        {
+                                            "key": "applicationNameColumn",
+                                            "label": "Application name column",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "CSV column with the application name. It names both the access profile and the application. Defaults to application_name."
+                                        },
+                                        {
+                                            "key": "matchTypeColumn",
+                                            "label": "Match type column",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "CSV column with the match type: dn (exact group DN) or cn_prefix (group CN starts with the value). ou is accepted and deferred. Defaults to match_type."
+                                        },
+                                        {
+                                            "key": "matchValueColumn",
+                                            "label": "Match value column",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "CSV column with the value to match, one value per cell. Defaults to match_value."
+                                        },
+                                        {
+                                            "key": "traceabilityColumns",
+                                            "label": "Traceability columns",
+                                            "type": "list",
+                                            "required": false,
+                                            "helpKey": "Extra CSV columns kept for reference, in file order between the application name and match type columns. Defaults to instance_name and integration_type."
+                                        }
+                                    ]
+                                },
+                                {
+                                    "label": "Access Profile configuration",
+                                    "items": [
+                                        {
+                                            "key": "dryRun",
+                                            "label": "Dry run",
+                                            "type": "toggle",
+                                            "helpKey": "Run every check and log the planned changes without creating, updating or deleting anything. Test Connection still applies the mapping source setup."
+                                        },
+                                        {
+                                            "key": "deleteMode",
+                                            "label": "Delete mode",
+                                            "type": "toggle",
+                                            "helpKey": "DELETION MODE: delete every access profile and application on the target source that carries this definition's marker, and nothing else. Does not read the mapping file. Leave off to create and update; objects that drop out of the mapping are then reported as orphans, not deleted."
+                                        },
+                                        {
+                                            "key": "requestable",
+                                            "label": "Requestable",
+                                            "type": "toggle",
+                                            "parentKey": "deleteMode",
+                                            "parentValue": "false",
+                                            "required": false,
+                                            "helpKey": "Make access profiles requestable and show applications in the request center."
+                                        },
+                                        {
+                                            "key": "requireApproval",
+                                            "label": "Require approval?",
+                                            "type": "toggle",
+                                            "parentKey": "requestable",
+                                            "parentValue": "true",
+                                            "required": false,
+                                            "helpKey": "Require approval for access requests."
+                                        },
+                                        {
+                                            "key": "approverType",
+                                            "label": "Approver",
+                                            "type": "select",
+                                            "required": true,
+                                            "parentKey": "requireApproval",
+                                            "parentValue": "true",
+                                            "helpKey": "Who approves requests. APP_OWNER: application owner. OWNER: access profile owner. SOURCE_OWNER: source owner. MANAGER: requester's manager.",
+                                            "options": [
+                                                {
+                                                    "label": "Application Owner",
+                                                    "value": "APP_OWNER"
+                                                },
+                                                {
+                                                    "label": "Owner",
+                                                    "value": "OWNER"
+                                                },
+                                                {
+                                                    "label": "Source Owner",
+                                                    "value": "SOURCE_OWNER"
+                                                },
+                                                {
+                                                    "label": "Manager",
+                                                    "value": "MANAGER"
+                                                }
+                                            ]
                                         }
                                     ]
                                 }

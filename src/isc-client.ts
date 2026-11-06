@@ -137,8 +137,9 @@ export class ISCClient {
      * Bring the mapping source's group schema and delimited-file settings in line with the mapping columns,
      * so an entitlement CSV upload loads one entitlement per row. Only adds or fixes; never removes.
      * Requires the PAT owner to be allowed to update the source and its schemas.
+     * Returns the changes made, or the changes that would be made when dryRun is true.
      */
-    async applyMappingSourceSetup(source: SourceV2025, columns: MappingColumns): Promise<string[]> {
+    async applyMappingSourceSetup(source: SourceV2025, columns: MappingColumns, dryRun = false): Promise<string[]> {
         const api = new SourcesV2025Api(this.config)
         const applied: string[] = []
         try {
@@ -149,15 +150,19 @@ export class ISCClient {
                 columns
             )
             if (setup.schema) {
-                await api.putSourceSchema({
-                    sourceId: source.id!,
-                    schemaId: setup.schema.id!,
-                    schemaV2025: setup.schema,
-                })
+                if (!dryRun) {
+                    await api.putSourceSchema({
+                        sourceId: source.id!,
+                        schemaId: setup.schema.id!,
+                        schemaV2025: setup.schema,
+                    })
+                }
                 applied.push(`schema ${setup.schema.name}`)
             }
             if (setup.connectorAttributePatch.length > 0) {
-                await api.updateSource({ id: source.id!, jsonPatchOperationV2025: setup.connectorAttributePatch })
+                if (!dryRun) {
+                    await api.updateSource({ id: source.id!, jsonPatchOperationV2025: setup.connectorAttributePatch })
+                }
                 applied.push(...setup.connectorAttributePatch.map((op) => op.path.replace('/connectorAttributes/', '')))
             }
         } catch (error: any) {
@@ -171,10 +176,11 @@ export class ISCClient {
         return applied
     }
 
-    async listEntitlements(filters: string): Promise<EntitlementV2025[]> {
+    async listEntitlements(filters: string, sorters?: string): Promise<EntitlementV2025[]> {
         const api = new EntitlementsV2025Api(this.config)
         const requestParameters: EntitlementsV2025ApiListEntitlementsRequest = {
             filters,
+            sorters,
         }
         const response = await Paginator.paginate(api, api.listEntitlements, requestParameters)
         return response.data as EntitlementV2025[]

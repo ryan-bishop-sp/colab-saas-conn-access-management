@@ -8,7 +8,13 @@ import {
 } from '@sailpoint/connector-sdk'
 import { ISCClient } from './isc-client'
 import { Config } from './model/config'
-import { aggregateAccessProfiles, aggregateEntitlements, aggregateRoles } from './operations'
+import {
+    aggregateAccessProfiles,
+    aggregateEntitlements,
+    aggregateMappingDefinition,
+    aggregateRoles,
+    setUpMappingDefinition,
+} from './operations'
 
 export const PROCESSINGWAIT = 60 * 1000
 export const connector = async () => {
@@ -19,6 +25,9 @@ export const connector = async () => {
     const stdTestConnection: StdTestConnectionHandler = async (context, input, res) => {
         try {
             await isc.getPublicIdentityConfig()
+            for (const definition of config.mappingDefinitions ?? []) {
+                await setUpMappingDefinition(isc, definition)
+            }
             res.send({})
         } catch (error) {
             logger.error(error)
@@ -38,6 +47,12 @@ export const connector = async () => {
                         logger.debug(`Processing ${config.accessProfiles.length} access profile definitions`)
                         for (const definition of config.accessProfiles) {
                             await aggregateAccessProfiles(config, isc, definition)
+                        }
+                    }
+                    if (config.mappingDefinitions) {
+                        logger.debug(`Processing ${config.mappingDefinitions.length} mapping definitions`)
+                        for (const definition of config.mappingDefinitions) {
+                            await aggregateMappingDefinition(isc, definition)
                         }
                     }
                     break
