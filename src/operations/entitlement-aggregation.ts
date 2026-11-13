@@ -146,11 +146,11 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
                 technicalName: technicalName(entitlement),
             })
             if (!asExpressions(definition).some((expression) => expression.trim() && renders(expression, context))) {
-                logger.info(`Skipping entitlement ${entitlement.id}: all expressions evaluated to empty`)
                 continue
             }
             selected.push(entitlement)
         }
+        logger.debug(`Selected ${selected.length} entitlements for definition ${definition.name}`)
         plans.push({ definition, selected })
     }
 

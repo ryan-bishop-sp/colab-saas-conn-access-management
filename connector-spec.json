@@ -85,7 +85,7 @@
                                         {
                                             "key": "entitlementExpression",
                                             "label": "Entitlement expression",
-                                            "helpKey": "Primary Velocity expression to select entitlements. Return any non-empty value to include the entitlement, or return empty/null to exclude. Variables include $entitlement, top-level aliases, $definitionName, $businessApplication and $technicalName. Example: #if($value.contains('OU=Prod,OU=AdobeAEM'))include#end",
+                                            "helpKey": "Primary Velocity expression to select entitlements. Return any non-empty value to include the entitlement, or return empty/null to exclude. Variables include $entitlement, top-level aliases, $definitionName, $businessApplication and $technicalName. Example: #if($value.indexOf(',OU=Prod,OU=AdobeAEM,') >= 0)include#end",
                                             "type": "textarea",
                                             "required": true
                                         },
