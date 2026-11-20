@@ -181,6 +181,13 @@
                                             "helpKey": "Technical key of an existing entitlement Access Model Metadata attribute that allows the application name value."
                                         },
                                         {
+                                            "key": "businessApplicationMetadataValue",
+                                            "label": "Business Application metadata value",
+                                            "type": "text",
+                                            "required": false,
+                                            "helpKey": "Technical metadata value for this application, for example pocAmcAdobeAem. Use a value without spaces for ad-hoc metadata. Defaults to the business application name when omitted."
+                                        },
+                                        {
                                             "key": "environmentExpression",
                                             "label": "Environment expression",
                                             "type": "textarea",

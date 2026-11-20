@@ -41,6 +41,7 @@ const definition = (application: string, overrides: Partial<EntitlementDefinitio
     displayNameExpression: '$businessApplication - $environment - $technicalName',
     descriptionExpression: '$businessApplication access in $environment',
     businessApplicationMetadataKey: 'businessApplication',
+    businessApplicationMetadataValue: 'exampleApp',
     environmentExpression: 'Prod',
     environmentMetadataKey: 'environment',
     ...overrides,
@@ -56,7 +57,7 @@ const makeClient = (entitlements: EntitlementV2025[] = [prod, dev, other]) => ({
     updateEntitlementsInBulk: jest.fn(async () => undefined),
     putEntitlementRequestConfig: jest.fn(async () => ({})),
     patchEntitlement: jest.fn(async (id: string, _patch: unknown) => ({ id })),
-    updateEntitlementMetadata: jest.fn(async (_id: string, _values: unknown) => undefined),
+    updateEntitlementMetadata: jest.fn(async (_ids: string[], _values: unknown) => undefined),
 })
 
 const run = (client: ReturnType<typeof makeClient>, ...definitions: EntitlementDefinition[]) =>
@@ -105,10 +106,13 @@ describe('entitlement application enrichment', () => {
                 value: 'Example access in Prod [AMC-ENT:Example]',
             },
         ])
-        expect(client.updateEntitlementMetadata).toHaveBeenCalledWith('prod-admin', [
-            { attribute: 'businessApplication', values: ['Example'] },
-            { attribute: 'environment', values: ['Prod'] },
-        ])
+        expect(client.updateEntitlementMetadata).toHaveBeenCalledWith(
+            ['prod-admin'],
+            [
+                { attribute: 'businessApplication', values: ['exampleApp'] },
+                { attribute: 'environment', values: ['Prod'] },
+            ]
+        )
         expect(JSON.stringify(patch)).not.toContain('/value')
     })
 
@@ -120,7 +124,7 @@ describe('entitlement application enrichment', () => {
                 description: 'Example access in Prod [AMC-ENT:Example]',
                 accessModelMetadata: {
                     attributes: [
-                        { key: 'businessApplication', values: [{ value: 'Example' }] },
+                        { key: 'businessApplication', values: [{ value: 'exampleApp' }] },
                         { key: 'environment', values: [{ value: 'Prod' }] },
                     ],
                 },

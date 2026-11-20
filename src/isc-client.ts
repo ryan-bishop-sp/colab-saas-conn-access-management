@@ -357,11 +357,14 @@ export class ISCClient {
         return response.data
     }
 
-    async updateEntitlementMetadata(id: string, values: Array<{ attribute: string; values: string[] }>): Promise<void> {
+    async updateEntitlementMetadata(
+        ids: string[],
+        values: Array<{ attribute: string; values: string[] }>
+    ): Promise<void> {
         const api = new AccessModelMetadataV2025Api(this.config)
         const requestParameters: AccessModelMetadataV2025ApiUpdateAccessModelMetadataByIdsRequest = {
             entitlementAttributeBulkUpdateIdsRequestV2025: {
-                entitlements: [id],
+                entitlements: ids,
                 operation: 'REPLACE',
                 replaceScope: 'ATTRIBUTE',
                 values,

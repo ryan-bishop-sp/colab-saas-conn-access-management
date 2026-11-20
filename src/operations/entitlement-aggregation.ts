@@ -223,12 +223,13 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
             if (!owner && manuallyUpdated.DESCRIPTION === true && entitlement.description !== description)
                 problems.push(`entitlement ${entitlement.id} has a manually managed description`)
 
+            const applicationMetadataValue = definition.businessApplicationMetadataValue?.trim() || application
             const metadata = metadataWith(entitlement, [
-                { key: definition.businessApplicationMetadataKey, value: application },
+                { key: definition.businessApplicationMetadataKey, value: applicationMetadataValue },
                 { key: definition.environmentMetadataKey, value: environment },
             ])
             const metadataUpdates = [
-                { key: definition.businessApplicationMetadataKey, value: application },
+                { key: definition.businessApplicationMetadataKey, value: applicationMetadataValue },
                 { key: definition.environmentMetadataKey, value: environment },
             ]
                 .filter((item): item is { key: string; value: string } => Boolean(item.key && item.value))
@@ -323,10 +324,20 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
                 `${targets.length} matched, ${updates.length} update, ${targets.length - updates.length} unchanged`
         )
         if (!definition.dryRun) {
+            const metadataGroups = new Map<
+                string,
+                { ids: string[]; values: Array<{ attribute: string; values: string[] }> }
+            >()
+            for (const target of updates.filter((item) => item.metadata.length > 0)) {
+                const key = JSON.stringify(target.metadata)
+                const group = metadataGroups.get(key) ?? { ids: [], values: target.metadata }
+                group.ids.push(target.entitlement.id!)
+                metadataGroups.set(key, group)
+            }
+            await runWithConcurrency([...metadataGroups.values()], API_CONCURRENCY, async (group) => {
+                await isc.updateEntitlementMetadata(group.ids, group.values)
+            })
             await runWithConcurrency(updates, API_CONCURRENCY, async (target) => {
-                if (target.metadata.length > 0) {
-                    await isc.updateEntitlementMetadata(target.entitlement.id!, target.metadata)
-                }
                 if (target.patch.length > 0) {
                     await isc.patchEntitlement(target.entitlement.id!, target.patch)
                 }

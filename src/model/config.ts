@@ -53,6 +53,8 @@ export interface EntitlementDefinition extends Definition {
     descriptionExpression?: string
     /** Existing entitlement AMM attribute technical key for the business application. */
     businessApplicationMetadataKey?: string
+    /** Technical AMM value for the business application; defaults to businessApplicationName. */
+    businessApplicationMetadataValue?: string
     /** Optional Velocity expression that produces the environment metadata value. */
     environmentExpression?: string
     /** Existing entitlement AMM attribute technical key for the environment. */
