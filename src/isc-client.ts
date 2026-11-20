@@ -1,4 +1,6 @@
 import {
+    AccessModelMetadataV2025Api,
+    AccessModelMetadataV2025ApiUpdateAccessModelMetadataByIdsRequest,
     AccessProfilesV2025Api,
     AccessProfilesV2025ApiCreateAccessProfileRequest,
     AccessProfilesV2025ApiListAccessProfilesRequest,
@@ -353,6 +355,19 @@ export class ISCClient {
         }
         const response = await api.patchEntitlement(requestParameters)
         return response.data
+    }
+
+    async updateEntitlementMetadata(id: string, values: Array<{ attribute: string; values: string[] }>): Promise<void> {
+        const api = new AccessModelMetadataV2025Api(this.config)
+        const requestParameters: AccessModelMetadataV2025ApiUpdateAccessModelMetadataByIdsRequest = {
+            entitlementAttributeBulkUpdateIdsRequestV2025: {
+                entitlements: [id],
+                operation: 'REPLACE',
+                replaceScope: 'ATTRIBUTE',
+                values,
+            },
+        }
+        await api.updateAccessModelMetadataByIds(requestParameters)
     }
 
     /**

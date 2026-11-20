@@ -1,6 +1,6 @@
 {
     "name": "access-management",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "main": "dist/index.js",
     "scripts": {
         "clean": "shx rm -rf ./dist",

@@ -56,6 +56,7 @@ const makeClient = (entitlements: EntitlementV2025[] = [prod, dev, other]) => ({
     updateEntitlementsInBulk: jest.fn(async () => undefined),
     putEntitlementRequestConfig: jest.fn(async () => ({})),
     patchEntitlement: jest.fn(async (id: string, _patch: unknown) => ({ id })),
+    updateEntitlementMetadata: jest.fn(async (_id: string, _values: unknown) => undefined),
 })
 
 const run = (client: ReturnType<typeof makeClient>, ...definitions: EntitlementDefinition[]) =>
@@ -77,6 +78,7 @@ describe('entitlement application enrichment', () => {
 
         expect(client.listEntitlements).toHaveBeenCalledTimes(1)
         expect(client.patchEntitlement).not.toHaveBeenCalled()
+        expect(client.updateEntitlementMetadata).not.toHaveBeenCalled()
         expect(client.updateEntitlementsInBulk).not.toHaveBeenCalled()
     })
 
@@ -102,17 +104,10 @@ describe('entitlement application enrichment', () => {
                 path: '/description',
                 value: 'Example access in Prod [AMC-ENT:Example]',
             },
-            {
-                op: 'replace',
-                path: '/accessModelMetadata',
-                value: {
-                    attributes: [
-                        { key: 'risk', values: [{ value: 'high' }] },
-                        { key: 'businessApplication', values: [{ value: 'Example' }] },
-                        { key: 'environment', values: [{ value: 'Prod' }] },
-                    ],
-                },
-            },
+        ])
+        expect(client.updateEntitlementMetadata).toHaveBeenCalledWith('prod-admin', [
+            { attribute: 'businessApplication', values: ['Example'] },
+            { attribute: 'environment', values: ['Prod'] },
         ])
         expect(JSON.stringify(patch)).not.toContain('/value')
     })
@@ -135,6 +130,7 @@ describe('entitlement application enrichment', () => {
         await run(client, definition('Example'))
 
         expect(client.patchEntitlement).not.toHaveBeenCalled()
+        expect(client.updateEntitlementMetadata).not.toHaveBeenCalled()
     })
 
     it('fails before writing when one entitlement matches two applications', async () => {
@@ -144,6 +140,7 @@ describe('entitlement application enrichment', () => {
             EntitlementEnrichmentError
         )
         expect(client.patchEntitlement).not.toHaveBeenCalled()
+        expect(client.updateEntitlementMetadata).not.toHaveBeenCalled()
         expect(client.updateEntitlementsInBulk).not.toHaveBeenCalled()
     })
 

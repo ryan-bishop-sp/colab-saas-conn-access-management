@@ -18,7 +18,11 @@ const BULK_UPDATE_CHUNK_SIZE = 50
 
 export type EntitlementAggregationClient = Pick<
     ISCClient,
-    'listEntitlements' | 'updateEntitlementsInBulk' | 'putEntitlementRequestConfig' | 'patchEntitlement'
+    | 'listEntitlements'
+    | 'updateEntitlementsInBulk'
+    | 'putEntitlementRequestConfig'
+    | 'patchEntitlement'
+    | 'updateEntitlementMetadata'
 >
 
 interface DefinitionPlan {
@@ -30,6 +34,7 @@ interface EnrichmentPlan {
     definition: EntitlementDefinition
     entitlement: EntitlementV2025
     patch: JsonPatchOperationV2025[]
+    metadata: Array<{ attribute: string; values: string[] }>
 }
 
 export class EntitlementEnrichmentError extends Error {
@@ -222,16 +227,25 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
                 { key: definition.businessApplicationMetadataKey, value: application },
                 { key: definition.environmentMetadataKey, value: environment },
             ])
+            const metadataUpdates = [
+                { key: definition.businessApplicationMetadataKey, value: application },
+                { key: definition.environmentMetadataKey, value: environment },
+            ]
+                .filter((item): item is { key: string; value: string } => Boolean(item.key && item.value))
+                .map((item) => ({ attribute: item.key, values: [item.value] }))
             const patch: JsonPatchOperationV2025[] = []
             if (entitlement.name !== name) patch.push({ op: 'replace', path: '/name', value: name })
             if (entitlement.description !== description)
                 patch.push({ op: 'replace', path: '/description', value: description })
-            if (
+            const metadataChanged =
                 (definition.businessApplicationMetadataKey || definition.environmentMetadataKey) &&
                 !areJsonEqual(entitlement.accessModelMetadata ?? { attributes: [] }, metadata)
-            )
-                patch.push({ op: 'replace', path: '/accessModelMetadata', value: metadata })
-            enrichments.push({ definition, entitlement, patch })
+            enrichments.push({
+                definition,
+                entitlement,
+                patch,
+                metadata: metadataChanged ? metadataUpdates : [],
+            })
         }
     }
     if (problems.length > 0) throw new EntitlementEnrichmentError(problems)
@@ -303,14 +317,19 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
     for (const { definition } of plans.filter((plan) => plan.definition.businessApplicationName)) {
         const application = definition.businessApplicationName!
         const targets = enrichments.filter((plan) => plan.definition === definition)
-        const updates = targets.filter((target) => target.patch.length > 0)
+        const updates = targets.filter((target) => target.patch.length > 0 || target.metadata.length > 0)
         logger.info(
             `${definition.dryRun ? '[DRY RUN] ' : ''}Entitlement application "${application}": ` +
                 `${targets.length} matched, ${updates.length} update, ${targets.length - updates.length} unchanged`
         )
         if (!definition.dryRun) {
             await runWithConcurrency(updates, API_CONCURRENCY, async (target) => {
-                await isc.patchEntitlement(target.entitlement.id!, target.patch)
+                if (target.metadata.length > 0) {
+                    await isc.updateEntitlementMetadata(target.entitlement.id!, target.metadata)
+                }
+                if (target.patch.length > 0) {
+                    await isc.patchEntitlement(target.entitlement.id!, target.patch)
+                }
             })
         }
     }

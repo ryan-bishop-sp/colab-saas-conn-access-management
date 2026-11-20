@@ -11,6 +11,13 @@ import { Config } from './model/config'
 import { aggregateAccessProfiles, aggregateEntitlements, aggregateRoles } from './operations'
 
 export const PROCESSINGWAIT = 60 * 1000
+const safeErrorMessage = (error: unknown): string => {
+    if (!(error instanceof Error)) return String(error)
+    const response = (error as Error & { response?: { status?: number; data?: unknown } }).response
+    const details = response?.data === undefined ? '' : `; response=${JSON.stringify(response.data)}`
+    return `${error.name}: ${error.message}${response?.status ? `; status=${response.status}` : ''}${details}`
+}
+
 export const connector = async () => {
     const config: Config = await readConfig()
     logger.level = 'debug'
@@ -21,8 +28,9 @@ export const connector = async () => {
             await isc.getPublicIdentityConfig()
             res.send({})
         } catch (error) {
-            logger.error(error)
-            throw new ConnectorError(error as string)
+            const message = safeErrorMessage(error)
+            logger.error(message)
+            throw new ConnectorError(message)
         }
     }
 
@@ -58,8 +66,9 @@ export const connector = async () => {
                     break
             }
         } catch (error) {
-            logger.error(error)
-            throw new ConnectorError(error as string)
+            const message = safeErrorMessage(error)
+            logger.error(message)
+            throw new ConnectorError(message)
         } finally {
             clearInterval(interval)
         }
