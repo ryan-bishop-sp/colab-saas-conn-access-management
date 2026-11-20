@@ -3,7 +3,6 @@ import { EntitlementV2025, JsonPatchOperationV2025 } from 'sailpoint-api-client'
 import { ISCClient } from '../isc-client'
 import { Config, EntitlementDefinition } from '../model/config'
 import {
-    areJsonEqual,
     buildEntitlementVelocityContext,
     buildEntitlementRequestConfig,
     evaluateVelocityExpression,
@@ -64,22 +63,6 @@ const technicalName = (entitlement: EntitlementV2025): string => {
               .replace(/\\,/g, ',')
               .trim()
         : value
-}
-
-const metadataWith = (
-    entitlement: EntitlementV2025,
-    values: Array<{ key?: string; value?: string }>
-): NonNullable<EntitlementV2025['accessModelMetadata']> => {
-    const updates = new Map(values.filter((item) => item.key && item.value).map((item) => [item.key!, item.value!]))
-    const existing = entitlement.accessModelMetadata?.attributes ?? []
-    const attributes = existing
-        .filter((attribute) => !updates.has(attribute.key ?? ''))
-        .map((attribute) => ({ ...attribute }))
-    for (const [key, value] of updates) {
-        const current = existing.find((attribute) => attribute.key === key)
-        attributes.push({ ...current, key, values: [{ value }] })
-    }
-    return { attributes }
 }
 
 /**
@@ -224,10 +207,6 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
                 problems.push(`entitlement ${entitlement.id} has a manually managed description`)
 
             const applicationMetadataValue = definition.businessApplicationMetadataValue?.trim() || application
-            const metadata = metadataWith(entitlement, [
-                { key: definition.businessApplicationMetadataKey, value: applicationMetadataValue },
-                { key: definition.environmentMetadataKey, value: environment },
-            ])
             const metadataUpdates = [
                 { key: definition.businessApplicationMetadataKey, value: applicationMetadataValue },
                 { key: definition.environmentMetadataKey, value: environment },
@@ -238,9 +217,13 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
             if (entitlement.name !== name) patch.push({ op: 'replace', path: '/name', value: name })
             if (entitlement.description !== description)
                 patch.push({ op: 'replace', path: '/description', value: description })
-            const metadataChanged =
-                (definition.businessApplicationMetadataKey || definition.environmentMetadataKey) &&
-                !areJsonEqual(entitlement.accessModelMetadata ?? { attributes: [] }, metadata)
+            const metadataChanged = metadataUpdates.some((update) => {
+                const current = entitlement.accessModelMetadata?.attributes?.find(
+                    (attribute) => attribute.key === update.attribute
+                )
+                const values = current?.values?.map((value) => value.value) ?? []
+                return values.length !== update.values.length || update.values.some((value) => !values.includes(value))
+            })
             enrichments.push({
                 definition,
                 entitlement,
