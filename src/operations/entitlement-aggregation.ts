@@ -334,7 +334,10 @@ export async function aggregateEntitlements(config: Config, isc: EntitlementAggr
                 group.ids.push(target.entitlement.id!)
                 metadataGroups.set(key, group)
             }
-            await runWithConcurrency([...metadataGroups.values()], API_CONCURRENCY, async (group) => {
+            const metadataJobs = [...metadataGroups.values()].flatMap((group) =>
+                chunk(group.ids, BULK_UPDATE_CHUNK_SIZE).map((ids) => ({ ids, values: group.values }))
+            )
+            await runWithConcurrency(metadataJobs, API_CONCURRENCY, async (group) => {
                 await isc.updateEntitlementMetadata(group.ids, group.values)
             })
             await runWithConcurrency(updates, API_CONCURRENCY, async (target) => {

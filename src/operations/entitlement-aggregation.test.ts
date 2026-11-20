@@ -137,6 +137,26 @@ describe('entitlement application enrichment', () => {
         expect(client.updateEntitlementMetadata).not.toHaveBeenCalled()
     })
 
+    it('chunks metadata updates at the API limit', async () => {
+        const entitlements = Array.from({ length: 51 }, (_, index) => ({
+            ...prod,
+            id: `group-${index}`,
+            value: `CN=Group-${index},OU=Prod,OU=Example,DC=example,DC=com`,
+        }))
+        const client = makeClient(entitlements)
+
+        await run(
+            client,
+            definition('Example', {
+                entitlementExpression: 'include',
+                additionalEntitlementExpressions: [],
+            })
+        )
+
+        expect(client.updateEntitlementMetadata).toHaveBeenCalledTimes(2)
+        expect(client.updateEntitlementMetadata.mock.calls.map(([ids]) => ids.length)).toEqual([50, 1])
+    })
+
     it('fails before writing when one entitlement matches two applications', async () => {
         const client = makeClient([prod])
 
